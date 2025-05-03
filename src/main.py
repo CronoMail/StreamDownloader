@@ -716,12 +716,11 @@ class StreamDownloaderApp(QMainWindow):
         )
         description.setWordWrap(True)
         description.setAlignment(Qt.AlignCenter)
-        
-        # GitHub links
+          # GitHub links
         github_layout = QHBoxLayout()
         github_label = QLabel("Github:")
-        ytarchive_link = QPushButton("CronoMail/StreamDownloader")
-        ytarchive_link.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/CronoMail/StreamDownloader")))
+        ytarchive_link = QPushButton("Your GitHub Repository")
+        ytarchive_link.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/yourusername/stream-downloader")))
         
         github_layout.addWidget(github_label)
         github_layout.addWidget(ytarchive_link)
