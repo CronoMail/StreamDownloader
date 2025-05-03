@@ -1,24 +1,4 @@
-import os
-import sys
-import subprocess
 
-def build_executable():
-    """Build a standalone executable using PyInstaller"""
-    print("Building Stream Downloader executable...")
-    
-    # Install PyInstaller and Pillow if not already installed
-    dependencies = ["pyinstaller", "pillow"]
-    
-    for dep in dependencies:
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "show", dep], 
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(f"{dep} is already installed.")
-        except subprocess.CalledProcessError:
-            print(f"Installing {dep}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", dep])
-      # Create spec file
-    spec_content = """
 # -*- mode: python ; coding: utf-8 -*-
 import os
 
@@ -68,26 +48,3 @@ exe = EXE(
     # Temporarily disabled icon due to format issues
     # icon=os.path.join('resources', 'icon.ico') if os.path.exists(os.path.join('resources', 'icon.ico')) else None,
 )
-"""
-    
-    with open("StreamDownloader.spec", "w") as f:
-        f.write(spec_content)
-    
-    # Create resources directory if it doesn't exist
-    if not os.path.exists("resources"):
-        os.makedirs("resources")
-    
-    # Run PyInstaller
-    subprocess.check_call([
-        sys.executable, 
-        "-m", 
-        "PyInstaller", 
-        "--clean",
-        "StreamDownloader.spec"
-    ])
-    
-    print("Build complete!")
-    print(f"Executable created: {os.path.join('dist', 'StreamDownloader.exe')}")
-
-if __name__ == "__main__":
-    build_executable()
