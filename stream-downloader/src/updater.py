@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtCore import QThread, pyqtSignal
 
 # Constants
-GITHUB_API_URL = "https://api.github.com/repos/yourusername/stream-downloader/releases/latest"
+GITHUB_API_URL = "https://api.github.com/repos/CronoMail/StreamDownloader/releases/latest"
 VERSION_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "VERSION")
 
 class UpdateChecker(QThread):

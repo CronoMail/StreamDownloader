@@ -22,7 +22,7 @@ setup(
     description="A modern UI application for downloading Twitch and YouTube livestreams",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/stream-downloader",
+    url="https://github.com/CronoMail/StreamDownloader",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
