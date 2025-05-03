@@ -8,10 +8,10 @@ from datetime import datetime
 from pathlib import Path
 
 # Import required modules from the existing application
-from stream_downloader import StreamDownloader
-from stream_merger import process_stream_download
-from history_manager import HistoryManager
-from updater import get_current_version, check_for_updates
+from src.stream_downloader import StreamDownloader
+from src.stream_merger import process_stream_download
+from src.history_manager import HistoryManager
+from src.updater import get_current_version, check_for_updates
 
 def print_banner():
     """Print the application banner"""
