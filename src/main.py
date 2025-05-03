@@ -719,9 +719,9 @@ class StreamDownloaderApp(QMainWindow):
         
         # GitHub links
         github_layout = QHBoxLayout()
-        github_label = QLabel("Source code:")
-        ytarchive_link = QPushButton("ytarchive")
-        ytarchive_link.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/Kethsar/ytarchive")))
+        github_label = QLabel("Github:")
+        ytarchive_link = QPushButton("CronoMail/StreamDownloader")
+        ytarchive_link.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/CronoMail/StreamDownloader")))
         
         github_layout.addWidget(github_label)
         github_layout.addWidget(ytarchive_link)
