@@ -1,28 +1,45 @@
 @echo off
-echo Stream Downloader Build Options
-echo =================================
 echo.
-echo 1. Build without icon (recommended if having icon issues)
-echo 2. Build with icon (requires valid icon file)
-echo 3. Build with console window (for debugging)
-echo 4. Exit
+echo Stream Downloader - Build Menu
+echo ============================
+echo.
+echo Select build type:
+echo.
+echo 1. Development Build (with console for debugging)
+echo 2. Production Build (no console, ready for distribution)
+echo 3. Exit
 echo.
 
-set /p option=Choose an option (1-4): 
+set /p choice=Enter your choice (1-3): 
 
-if "%option%"=="1" (
-    python -c "import re; with open('build.py', 'r') as f: content = f.read(); content = re.sub(r'icon=os\.path\.join.*', '# icon disabled', content); with open('build.py', 'w') as f: f.write(content)"
-    python build.py
-) else if "%option%"=="2" (
-    python -c "import re; with open('build.py', 'r') as f: content = f.read(); content = re.sub(r'# icon disabled|# icon=os\.path\.join.*', 'icon=os.path.join(\'resources\', \'icon.ico\') if os.path.exists(os.path.join(\'resources\', \'icon.ico\')) else None,', content); with open('build.py', 'w') as f: f.write(content)"
-    python build.py
-) else if "%option%"=="3" (
-    python -c "import re; with open('build.py', 'r') as f: content = f.read(); content = re.sub(r'console=False', 'console=True', content); with open('build.py', 'w') as f: f.write(content)"
-    python build.py
-    python -c "import re; with open('build.py', 'r') as f: content = f.read(); content = re.sub(r'console=True', 'console=False', content); with open('build.py', 'w') as f: f.write(content)"
-) else if "%option%"=="4" (
-    exit
+if "%choice%"=="1" (
+    echo.
+    echo Starting development build (with console)...
+    echo.
+    python -c "import re; import os; content = open('fixed_build.py', 'r').read(); content = content.replace('--windowed', '--console'); with open('temp_build_script.py', 'w') as f: f.write(content); os.system('python temp_build_script.py'); os.remove('temp_build_script.py')"
+) else if "%choice%"=="2" (
+    echo.
+    echo Starting production build (no console)...
+    echo.
+    python production_build.py
+) else if "%choice%"=="3" (
+    echo Exiting...
+    exit /b 0
 ) else (
-    echo Invalid option. Please try again.
-    pause
+    echo Invalid choice. Please run the script again.
+    exit /b 1
 )
+
+echo.
+if exist dist\StreamDownloader.exe (
+    echo Build completed successfully!
+    echo Executable is located at: %CD%\dist\StreamDownloader.exe
+    echo.
+    set /p run_now=Would you like to run the application now? (Y/N): 
+    if /i "%run_now%"=="Y" (
+        start "" "dist\StreamDownloader.exe"
+    )
+) else (
+    echo Build may have failed, please check error messages above.
+)
+echo.
