@@ -47,7 +47,8 @@ class Worker(QThread):
         self.options = options
         self.process = None
         self.running = False
-          def run(self):
+        
+    def run(self):
         self.running = True
         try:
             # Create command based on options
@@ -162,7 +163,8 @@ class Worker(QThread):
             }
             
         return None
-      def stop(self):
+        
+    def stop(self):
         """Stop the download process"""
         self.running = False
         if self.process:

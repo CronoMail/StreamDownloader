@@ -51,7 +51,7 @@ python install.py
 1. Clone this repository or download the source code:
 
 ```bash
-git clone https://github.com/yourusername/stream-downloader.git
+git clone https://github.com/Cronomail/stream-downloader.git
 cd stream-downloader
 ```
 
