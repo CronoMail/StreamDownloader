@@ -27,3 +27,4 @@ Thumbs.db
 *.log
 GITHUB_RELEASE_GUIDE.md
 download/
+*.zip
