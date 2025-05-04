@@ -284,16 +284,95 @@ def download_with_yt_dlp(args):
             if not hasattr(args, 'no_history') or not args.no_history:
                 save_to_history(args, False, error=error_message)
             
+            # Try to mux any fragments that were already downloaded
+            output_dir = os.path.dirname(os.path.abspath(args.output))
+            fragments_dir = None
+            
+            # Check for fragments in the output directory
+            for subdir in os.listdir(output_dir):
+                if os.path.isdir(os.path.join(output_dir, subdir)) and subdir.startswith("NA_"):
+                    potential_fragments_dir = os.path.join(output_dir, subdir)
+                    if any(f.endswith(".ts") for f in os.listdir(potential_fragments_dir)):
+                        fragments_dir = potential_fragments_dir
+                        break
+            
+            # If fragments directory is found, try to mux the fragments
+            if fragments_dir:
+                print(f"{Fore.CYAN}Found partially downloaded fragments. Attempting to mux available content...")
+                
+                # Define output file path (using the fragments directory name as a base)
+                output_filename = f"{os.path.basename(fragments_dir)}_partial.mp4"
+                output_file = os.path.join(output_dir, output_filename)
+                
+                # Prepare options for processing
+                options = {
+                    "keep_fragments": hasattr(args, 'keep_fragments') and args.keep_fragments,
+                    "metadata": {
+                        "title": f"Partial download - {os.path.basename(fragments_dir)}",
+                        "comment": "This is a partial download that encountered an error."
+                    }
+                }
+                
+                # Process the downloaded fragments
+                try:
+                    if process_stream_download(fragments_dir, output_file, options):
+                        print(f"{Fore.GREEN}Successfully merged available fragments: {output_file}")
+                    else:
+                        print(f"{Fore.RED}Failed to merge fragments. The download was too short or fragments are corrupted.")
+                except Exception as merge_error:
+                    print(f"{Fore.RED}Error merging fragments: {str(merge_error)}")
+            
             return False
             
     except KeyboardInterrupt:
         print(f"\n\n{Fore.YELLOW}Download cancelled by user.")
+        
+        # Try to mux any fragments that were already downloaded
+        output_dir = os.path.dirname(os.path.abspath(args.output))
+        fragments_dir = None
+        
+        # Check for fragments in the output directory
+        for subdir in os.listdir(output_dir):
+            if os.path.isdir(os.path.join(output_dir, subdir)) and subdir.startswith("NA_"):
+                potential_fragments_dir = os.path.join(output_dir, subdir)
+                if any(f.endswith(".ts") for f in os.listdir(potential_fragments_dir)):
+                    fragments_dir = potential_fragments_dir
+                    break
+        
+        # If fragments directory is found, try to mux the fragments
+        if fragments_dir:
+            print(f"{Fore.CYAN}Found partially downloaded fragments. Attempting to mux available content...")
+            
+            # Define output file path (using the fragments directory name as a base)
+            output_filename = f"{os.path.basename(fragments_dir)}_partial.mp4"
+            output_file = os.path.join(output_dir, output_filename)
+            
+            # Prepare options for processing
+            options = {
+                "keep_fragments": hasattr(args, 'keep_fragments') and args.keep_fragments,
+                "metadata": {
+                    "title": f"Partial download - {os.path.basename(fragments_dir)}",
+                    "comment": "This is a partial download that was cancelled by the user."
+                }
+            }
+            
+            # Process the downloaded fragments
+            try:
+                if process_stream_download(fragments_dir, output_file, options):
+                    print(f"{Fore.GREEN}Successfully merged available fragments: {output_file}")
+                else:
+                    print(f"{Fore.RED}Failed to merge fragments. The download was too short or fragments are corrupted.")
+            except Exception as merge_error:
+                print(f"{Fore.RED}Error merging fragments: {str(merge_error)}")
+        else:
+            print(f"{Fore.YELLOW}No downloaded fragments found to merge.")
         
         # Save to history as canceled
         if not hasattr(args, 'no_history') or not args.no_history:
             save_to_history(args, False, error="Cancelled by user")
         
         return False
+        
     except subprocess.CalledProcessError as e:
         print(f"\n{Fore.RED}Error: Download failed with exit code {e.returncode}")
         
@@ -301,13 +380,90 @@ def download_with_yt_dlp(args):
         if not hasattr(args, 'no_history') or not args.no_history:
             save_to_history(args, False, error=str(e))
         
+        # Try to mux any fragments that were already downloaded
+        output_dir = os.path.dirname(os.path.abspath(args.output))
+        fragments_dir = None
+        
+        # Check for fragments in the output directory
+        for subdir in os.listdir(output_dir):
+            if os.path.isdir(os.path.join(output_dir, subdir)) and subdir.startswith("NA_"):
+                potential_fragments_dir = os.path.join(output_dir, subdir)
+                if any(f.endswith(".ts") for f in os.listdir(potential_fragments_dir)):
+                    fragments_dir = potential_fragments_dir
+                    break
+        
+        # If fragments directory is found, try to mux the fragments
+        if fragments_dir:
+            print(f"{Fore.CYAN}Found partially downloaded fragments. Attempting to mux available content...")
+            
+            # Define output file path (using the fragments directory name as a base)
+            output_filename = f"{os.path.basename(fragments_dir)}_partial.mp4"
+            output_file = os.path.join(output_dir, output_filename)
+            
+            # Prepare options for processing
+            options = {
+                "keep_fragments": hasattr(args, 'keep_fragments') and args.keep_fragments,
+                "metadata": {
+                    "title": f"Partial download - {os.path.basename(fragments_dir)}",
+                    "comment": "This is a partial download that failed with error."
+                }
+            }
+            
+            # Process the downloaded fragments
+            try:
+                if process_stream_download(fragments_dir, output_file, options):
+                    print(f"{Fore.GREEN}Successfully merged available fragments: {output_file}")
+                else:
+                    print(f"{Fore.RED}Failed to merge fragments. The download was too short or fragments are corrupted.")
+            except Exception as merge_error:
+                print(f"{Fore.RED}Error merging fragments: {str(merge_error)}")
+        
         return False
+        
     except Exception as e:
         print(f"\n{Fore.RED}Error: {str(e)}")
         
         # Save failed download to history if enabled
         if not hasattr(args, 'no_history') or not args.no_history:
             save_to_history(args, False, error=str(e))
+        
+        # Try to mux any fragments that were already downloaded
+        output_dir = os.path.dirname(os.path.abspath(args.output))
+        fragments_dir = None
+        
+        # Check for fragments in the output directory
+        for subdir in os.listdir(output_dir):
+            if os.path.isdir(os.path.join(output_dir, subdir)) and subdir.startswith("NA_"):
+                potential_fragments_dir = os.path.join(output_dir, subdir)
+                if any(f.endswith(".ts") for f in os.listdir(potential_fragments_dir)):
+                    fragments_dir = potential_fragments_dir
+                    break
+        
+        # If fragments directory is found, try to mux the fragments
+        if fragments_dir:
+            print(f"{Fore.CYAN}Found partially downloaded fragments. Attempting to mux available content...")
+            
+            # Define output file path (using the fragments directory name as a base)
+            output_filename = f"{os.path.basename(fragments_dir)}_partial.mp4"
+            output_file = os.path.join(output_dir, output_filename)
+            
+            # Prepare options for processing
+            options = {
+                "keep_fragments": hasattr(args, 'keep_fragments') and args.keep_fragments,
+                "metadata": {
+                    "title": f"Partial download - {os.path.basename(fragments_dir)}",
+                    "comment": "This is a partial download that encountered an exception."
+                }
+            }
+            
+            # Process the downloaded fragments
+            try:
+                if process_stream_download(fragments_dir, output_file, options):
+                    print(f"{Fore.GREEN}Successfully merged available fragments: {output_file}")
+                else:
+                    print(f"{Fore.RED}Failed to merge fragments. The download was too short or fragments are corrupted.")
+            except Exception as merge_error:
+                print(f"{Fore.RED}Error merging fragments: {str(merge_error)}")
         
         return False
 

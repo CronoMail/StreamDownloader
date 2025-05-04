@@ -5,6 +5,7 @@ __pycache__/
 
 # Distribution / packaging
 dist/
+download/
 build/
 *.egg-info/
 
@@ -18,6 +19,7 @@ ENV/
 .vscode/
 *.swp
 *.swo
+*.zip
 
 # OS specific files
 .DS_Store
@@ -26,6 +28,4 @@ Thumbs.db
 # User-specific files
 *.log
 GITHUB_RELEASE_GUIDE.md
-download/
-*.zip
 StreamDownloader.spec
