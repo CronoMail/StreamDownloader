@@ -1,7 +1,7 @@
 @echo off
 echo Starting Stream Downloader...
 echo.
-python src/main.py
+python app.py
 if errorlevel 1 (
     echo.
     echo Error: Failed to start Stream Downloader.

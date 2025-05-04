@@ -3,7 +3,7 @@ CLI help module for Stream Downloader
 Contains help text and documentation for the CLI interface
 """
 
-from colorama import Fore, Style # type: ignore
+from colorama import Fore, Style
 
 def get_main_help():
     """Return the main help text for the CLI"""

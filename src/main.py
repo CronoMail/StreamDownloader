@@ -24,12 +24,13 @@ except ImportError:
     sys.exit(1)
 
 # Local imports
-from history_manager import HistoryManager
-from updater import get_current_version, UpdateChecker, show_update_dialog
+from src.utils.history_manager import HistoryManager
+from src.utils.updater import get_current_version, UpdateChecker, show_update_dialog
+from src.utils.platform_utils import detect_platform
 
 # Constants
 APP_NAME = "Stream Downloader"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.2.0"
 APP_AUTHOR = "StreamGrab Team"
 DEFAULT_OUTPUT_TEMPLATE = "%(title)s-%(id)s.%(ext)s"
 
@@ -77,8 +78,7 @@ class Worker(QThread):
                     break
                     
                 self.log.emit(line.strip())
-                
-                # Parse progress information
+                  # Parse progress information
                 progress_info = self.parse_progress(line)
                 if progress_info:
                     self.progress.emit(progress_info)
@@ -99,39 +99,88 @@ class Worker(QThread):
     
     def build_command(self):
         """Build command based on selected options"""
-        command = ["python", "-m", "yt_dlp"]
+        # Detect platform from URL
+        is_twitch = "twitch.tv" in self.stream_url
         
-        # Add URL
-        command.append(self.stream_url)
-        
-        # Add quality settings
-        if self.quality and self.quality != "best":
-            command.extend(["-f", self.quality])
-        
-        # Add output template
-        output_template = os.path.join(self.output_path, self.options.get("output_template", DEFAULT_OUTPUT_TEMPLATE))
-        command.extend(["-o", output_template])
-        
-        # Add option to download live streams
-        command.append("--live-from-start")
-        
-        # Add other options based on checkboxes
-        if self.options.get("write_thumbnail", False):
-            command.append("--write-thumbnail")
+        if is_twitch:
+            # Use streamlink for Twitch
+            command = ["streamlink"]
             
-        if self.options.get("add_metadata", False):
-            command.append("--add-metadata")
-        
-        if self.options.get("keep_fragments", False):
-            command.append("--keep-fragments")
+            # Add URL
+            command.append(self.stream_url)
             
-        if self.options.get("cookies_file"):
-            command.extend(["--cookies", self.options.get("cookies_file")])
+            # Add quality
+            if self.quality and self.quality != "best":
+                command.append(self.quality)
+            else:
+                command.append("best")
             
-        # Add verbose output
-        command.append("-v")
+            # Output file path
+            output_filename = os.path.join(
+                self.output_path, 
+                f"twitch_stream_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.mp4"
+            )
+            command.extend(["-o", output_filename])
             
-        return command
+            # Add force progress option
+            command.append("--force-progress")
+            
+            # Add retry options
+            command.extend(["--retry-max", "3"])
+            command.extend(["--retry-streams", "5"])
+            
+            # Add stream timeout option
+            command.extend(["--stream-timeout", "30"])
+            
+            # Cookies file for authenticated streams
+            if self.options.get("cookies_file"):
+                command.extend(["--twitch-cookies", self.options.get("cookies_file")])
+            
+            # Set low latency for live streams if not downloading from start
+            if not self.options.get("live_from_start", True):
+                command.append("--twitch-low-latency")
+            
+            # Set logging level to debug for verbose output
+            command.append("--loglevel")
+            command.append("debug")
+            
+            return command
+        else:
+            # Use yt-dlp for YouTube and other platforms
+            command = ["python", "-m", "yt_dlp"]
+            
+            # Add URL
+            command.append(self.stream_url)
+            
+            # Add quality settings
+            if self.quality and self.quality != "best":
+                command.extend(["-f", self.quality])
+            
+            # Add output template
+            output_template = os.path.join(self.output_path, self.options.get("output_template", DEFAULT_OUTPUT_TEMPLATE))
+            command.extend(["-o", output_template])
+            
+            # Add option to download live streams from start if enabled
+            if self.options.get("live_from_start", True):
+                command.append("--live-from-start")
+            
+            # Add other options based on checkboxes
+            if self.options.get("write_thumbnail", False):
+                command.append("--write-thumbnail")
+                
+            if self.options.get("add_metadata", False):
+                command.append("--add-metadata")
+            
+            if self.options.get("keep_fragments", False):
+                command.append("--keep-fragments")
+                
+            if self.options.get("cookies_file"):
+                command.extend(["--cookies", self.options.get("cookies_file")])
+            
+            # Add verbose output
+            command.append("-v")
+                
+            return command
     
     def parse_progress(self, line):
         """Parse progress information from yt-dlp output"""
@@ -153,6 +202,30 @@ class Worker(QThread):
             return {
                 "status": "started",
                 "filename": started_match.group(1)
+            }
+            
+        # Match fragment download line
+        fragment_match = re.search(r'\[download\]\s+Downloading\s+fragment\s+(\d+)\s+of\s+(\d+)', line)
+        if fragment_match:
+            current = int(fragment_match.group(1))
+            total = int(fragment_match.group(2))
+            return {
+                "status": "fragment",
+                "current": current,
+                "total": total,
+                "type": "video"
+            }
+            
+        # Match audio fragment download line
+        audio_fragment_match = re.search(r'\[download\]\s+Downloading\s+fragment\s+(\d+)\s+of\s+(\d+)\s+\(audio\)', line)
+        if audio_fragment_match:
+            current = int(audio_fragment_match.group(1))
+            total = int(audio_fragment_match.group(2))
+            return {
+                "status": "fragment",
+                "current": current,
+                "total": total,
+                "type": "audio"
             }
             
         # Match merging line
@@ -193,15 +266,9 @@ class TwitchDownloader:
     
     @staticmethod
     def get_qualities():
-        return [
-            "best",
-            "720p60",
-            "720p",
-            "480p",
-            "360p",
-            "160p",
-            "audio_only"
-        ]
+        # Use platform_utils for consistent quality options
+        from src.platform_utils import get_platform_qualities
+        return get_platform_qualities("twitch")
     
     @staticmethod
     def validate_url(url):
@@ -222,14 +289,9 @@ class YouTubeDownloader:
     
     @staticmethod
     def get_qualities():
-        return [
-            "best",
-            "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-            "bestvideo[height<=720]+bestaudio/best[height<=720]",
-            "bestvideo[height<=480]+bestaudio/best[height<=480]",
-            "bestvideo[height<=360]+bestaudio/best[height<=360]",
-            "worstvideo+worstaudio/worst"
-        ]
+        # Use platform_utils for consistent quality options
+        from src.platform_utils import get_platform_qualities
+        return get_platform_qualities("youtube")
     
     @staticmethod
     def validate_url(url):
@@ -342,15 +404,18 @@ class StreamDownloaderApp(QMainWindow):
         options_frame = QFrame()
         options_frame.setFrameShape(QFrame.StyledPanel)
         options_layout = QGridLayout(options_frame)
-        
-        # Checkboxes for options
+          # Checkboxes for options
         self.write_thumbnail_cb = QCheckBox("Save thumbnail")
         self.add_metadata_cb = QCheckBox("Add metadata")
         self.keep_fragments_cb = QCheckBox("Keep fragments")
+        self.live_from_start_cb = QCheckBox("Live from start")
+        self.live_from_start_cb.setChecked(True)
+        self.live_from_start_cb.setToolTip("Download live streams from the beginning. Disable if you get an error with Twitch streams.")
         
         options_layout.addWidget(self.write_thumbnail_cb, 0, 0)
         options_layout.addWidget(self.add_metadata_cb, 0, 1)
         options_layout.addWidget(self.keep_fragments_cb, 1, 0)
+        options_layout.addWidget(self.live_from_start_cb, 1, 1)
         
         # Cookies file option
         cookies_layout = QHBoxLayout()
@@ -719,7 +784,7 @@ class StreamDownloaderApp(QMainWindow):
           # GitHub links
         github_layout = QHBoxLayout()
         github_label = QLabel("Github:")
-        ytarchive_link = QPushButton("Your GitHub Repository")
+        ytarchive_link = QPushButton("GitHub Repository")
         ytarchive_link.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/yourusername/stream-downloader")))
         
         github_layout.addWidget(github_label)
@@ -846,13 +911,13 @@ class StreamDownloaderApp(QMainWindow):
         if not os.path.isdir(output_dir):
             QMessageBox.warning(self, "Invalid Directory", "The specified output directory does not exist.")
             return
-        
-        # Gather options
+          # Gather options
         options = {
             "output_template": self.output_template.text(),
             "write_thumbnail": self.write_thumbnail_cb.isChecked(),
             "add_metadata": self.add_metadata_cb.isChecked(),
-            "keep_fragments": self.keep_fragments_cb.isChecked()
+            "keep_fragments": self.keep_fragments_cb.isChecked(),
+            "live_from_start": self.live_from_start_cb.isChecked()
         }
         
         # Add cookies file if specified
@@ -889,7 +954,6 @@ class StreamDownloaderApp(QMainWindow):
             # Update UI
             self.stop_button.setEnabled(False)
             self.status_label.setText("Stopping...")
-    
     def update_progress(self, progress_info):
         """Update progress information"""
         if "percent" in progress_info:
@@ -903,6 +967,26 @@ class StreamDownloaderApp(QMainWindow):
             elif progress_info["status"] == "merging":
                 self.status_label.setText("Merging files...")
                 self.progress_bar.setRange(0, 0)  # Show indeterminate progress
+                
+            elif progress_info["status"] == "fragment":
+                current = progress_info.get("current", 0)
+                total = progress_info.get("total", 1)
+                fragment_type = progress_info.get("type", "video")
+                
+                # Calculate percent for progress bar
+                percent = int((current / total) * 100) if total > 0 else 0
+                self.progress_bar.setValue(percent)
+                
+                # Update status label
+                fragment_type_display = f"{fragment_type.capitalize()} fragment"
+                self.status_label.setText(f"Downloading {fragment_type_display}: {current} of {total} ({percent}%)")
+                  # Add a colorful indicator to the log
+                if fragment_type == "video":
+                    color = "blue"
+                else:
+                    color = "purple"
+                
+                self.add_log(f"<span style='color:{color};'>Downloading {fragment_type_display}: {current} of {total}</span>", with_timestamp=False)
     
     def on_download_finished(self, success, message):
         """Handle download finished"""
@@ -939,16 +1023,21 @@ class StreamDownloaderApp(QMainWindow):
                 "quality": self.quality_selector.currentText(),
                 "output_path": self.output_path.text(),
                 "timestamp": datetime.now().isoformat(),
-                "success": False,
-                "error_message": message
+                "success": False,                "error_message": message
             }
             
             self.history_manager.add_download(download_info)
-    
-    def add_log(self, message):
+        
+    def add_log(self, message, with_timestamp=True):
         """Add message to log output"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.log_output.append(f"[{timestamp}] {message}")
+        # Enable HTML formatting in the log output
+        self.log_output.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.log_output.setAcceptRichText(True)
+        if with_timestamp:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self.log_output.append(f"[{timestamp}] {message}")
+        else:
+            self.log_output.append(message)
         
         # Auto-scroll to bottom
         scrollbar = self.log_output.verticalScrollBar()
@@ -971,6 +1060,7 @@ class StreamDownloaderApp(QMainWindow):
             self.write_thumbnail_cb.setChecked(item.get("options", {}).get("write_thumbnail", False))
             self.add_metadata_cb.setChecked(item.get("options", {}).get("add_metadata", False))
             self.keep_fragments_cb.setChecked(item.get("options", {}).get("keep_fragments", False))
+            self.live_from_start_cb.setChecked(item.get("options", {}).get("live_from_start", True))
             self.cookies_path.setText(item.get("options", {}).get("cookies_file", ""))
             self.ffmpeg_path.setText(item.get("options", {}).get("ffmpeg_path", ""))
             self.proxy_url.setText(item.get("options", {}).get("proxy", ""))

@@ -27,8 +27,11 @@ def build_executable():
             print(f"Cleaning {dir_name} directory...")
             shutil.rmtree(dir_name)
     
-    # Copy all source files to a temporary directory for packaging
-    temp_dir = os.path.join(os.getcwd(), 'temp_build')
+    # Create data files list with the QSS styles
+    datas = [
+        ('src/ui/style.qss', 'src/ui'),
+        ('src/ui/style_dark.qss', 'src/ui')
+    ]
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir)
     

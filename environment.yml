@@ -1,0 +1,16 @@
+name: stream-downloader
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.8
+  - pip
+  - pip:
+    - PyQt5>=5.15.0
+    - yt-dlp>=2025.04.30
+    - streamlink>=6.0.0
+    - requests>=2.25.0
+    - inquirer>=3.1.3
+    - colorama>=0.4.6
+    - pyinstaller>=5.7.0
+    - pillow>=9.0.0

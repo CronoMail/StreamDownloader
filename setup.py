@@ -1,20 +1,28 @@
 from setuptools import setup, find_packages
+import os
+
+with open('VERSION') as f:
+    version = f.read().strip()
 
 setup(
     name="stream-downloader",
-    version="1.0.0",
+    version=version,
     packages=find_packages(),
     package_data={
-        "stream_downloader": ["style.qss"],
+        "src.ui": ["*.qss"],
     },
     install_requires=[
         "PyQt5>=5.15.0",
-        "yt-dlp>=2022.7.18",
+        "yt-dlp>=2025.04.30",
+        "streamlink>=6.0.0",
         "requests>=2.25.0",
+        "inquirer>=3.1.3",
+        "colorama>=0.4.6",
     ],
     entry_points={
         "console_scripts": [
-            "stream-downloader=stream_downloader.main:main",
+            "stream-downloader-gui=src.main:main",
+            "stream-downloader=src.cli:main",
         ],
     },
     author="Stream Downloader Team",

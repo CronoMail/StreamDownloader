@@ -6,7 +6,11 @@ A modern application for downloading Twitch and YouTube livestreams with ease. A
 
 ## Features
 
-- **Multi-Platform Support**: Download livestreams from Twitch and YouTube
+- **Multi-Platform Support**: 
+  - Download livestreams from Twitch and YouTube
+  - Optimized downloads with platform-specific backends:
+    - Streamlink for Twitch streams
+    - yt-dlp for YouTube and other platforms
 - **Dual Interfaces**: 
   - User-friendly GUI with advanced controls
   - Powerful CLI with both interactive and command modes
@@ -14,11 +18,15 @@ A modern application for downloading Twitch and YouTube livestreams with ease. A
   - Downloads and processes live stream fragments similar to ytarchive
   - Captures streams from the beginning even when joining late
   - Supports multiple quality options
+  - Displays real-time tracking of video and audio fragments
 - **User-Friendly Experience**:
   - Modern, responsive interface with light and dark themes (GUI)
   - Colorful, interactive menu-driven CLI with spinner animations
   - Real-time progress tracking with detailed logs
   - Automatic platform detection from URLs
+  - Flexible download options including the ability to disable "live from start" for Twitch streams that don't support it
+
+If you encounter any issues, please check the [Troubleshooting Guide](TROUBLESHOOTING.md) for solutions to common problems.
 - **Accessibility Features**:
   - Members-only content support via cookies
   - Proxy configuration for region-restricted content
@@ -34,6 +42,34 @@ A modern application for downloading Twitch and YouTube livestreams with ease. A
   - Desktop shortcuts
   - Auto-update functionality
   - Lightweight and efficient resource usage
+
+## Project Structure
+
+```
+StreamDownloader/
+├── src/                  # Source code
+│   ├── core/             # Core functionality
+│   │   ├── stream_downloader.py
+│   │   └── stream_merger.py
+│   ├── downloaders/      # Platform-specific downloaders
+│   │   ├── download_yt_dlp.py      # YouTube downloader
+│   │   └── download_streamlink.py  # Twitch downloader
+│   ├── utils/            # Utility modules
+│   │   ├── history_manager.py
+│   │   ├── platform_utils.py
+│   │   ├── spinner.py
+│   │   └── updater.py
+│   ├── ui/               # User interface components
+│   │   ├── cli_help.py
+│   │   ├── style.qss
+│   │   └── style_dark.qss
+│   ├── main.py           # GUI application
+│   └── cli.py            # CLI interface
+├── app.py                # GUI entry point
+├── stream-dl.py          # CLI entry point
+├── README.md
+└── TROUBLESHOOTING.md
+```
 
 ## Installation
 

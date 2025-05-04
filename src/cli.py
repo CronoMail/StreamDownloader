@@ -6,21 +6,24 @@ import time
 import json
 import shutil
 import threading
+import re
 from datetime import datetime
 from pathlib import Path
-import inquirer
-from colorama import init, Fore, Style, Back
+import inquirer # type: ignore
+from colorama import init, Fore, Style, Back # type: ignore
 
 # Initialize colorama for cross-platform colored output
 init(autoreset=True)
 
 # Import required modules from the existing application
-from src.stream_downloader import StreamDownloader
-from src.stream_merger import process_stream_download
-from src.history_manager import HistoryManager
-from src.updater import get_current_version, check_for_updates
-from src.spinner import Spinner
-from src.cli_help import get_main_help, get_command_help
+from src.core.stream_downloader import StreamDownloader
+from src.core.stream_merger import process_stream_download
+from src.utils.history_manager import HistoryManager
+from src.utils.updater import get_current_version, check_for_updates
+from src.utils.spinner import Spinner
+from src.utils.platform_utils import detect_platform, get_platform_qualities
+from src.ui.cli_help import get_main_help, get_command_help
+from src.downloaders.download_streamlink import download_with_streamlink
 
 def print_banner():
     """Print the application banner"""
@@ -108,6 +111,37 @@ def fetch_available_formats(url):
 
 def download_with_yt_dlp(args):
     """Download content using yt-dlp with progress display"""
+    # Detect platform from URL
+    platform = detect_platform(args.url)
+    
+    # For Twitch streams, use streamlink instead
+    if platform == "twitch":
+        print(f"{Fore.CYAN}Twitch stream detected. Using streamlink for optimal download performance.")
+        
+        # Create output path
+        output_path = args.output
+        if not os.path.isabs(output_path):
+            output_path = os.path.join(os.getcwd(), output_path)
+        
+        # Create output directory if it doesn't exist
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+        
+        # If output is a directory, create a filename
+        if os.path.isdir(output_path):
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            output_filename = f"twitch_stream_{timestamp}.mp4"
+            output_path = os.path.join(output_path, output_filename)
+        
+        # Use streamlink for Twitch
+        success = download_with_streamlink(args, output_path)
+        
+        # Save to history if enabled
+        if not hasattr(args, 'no_history') or not args.no_history:
+            save_to_history(args, success, error="Failed to download with streamlink" if not success else None)
+        
+        return success
     # Check if we need to list formats first
     if hasattr(args, 'list_formats') and args.list_formats:
         list_command = ["yt-dlp", "--list-formats", args.url]
@@ -235,6 +269,34 @@ def download_with_yt_dlp(args):
                         spinner_char = spinner_chars[spinner_idx % len(spinner_chars)]
                         print(f"\r{Fore.CYAN}{spinner_char} {Fore.YELLOW}{last_status}", end='')
                         spinner_idx += 1
+                    # Track fragment downloads
+                    elif "Downloading fragment" in line:
+                        fragment_match = re.search(r'Downloading fragment (\d+) of (\d+)(?:\s+\(audio\))?', line)
+                        if fragment_match:
+                            current = int(fragment_match.group(1))
+                            total = int(fragment_match.group(2))
+                            
+                            # Check if this is an audio fragment
+                            is_audio = "(audio)" in line
+                            
+                            # Set color and prefix based on type
+                            if is_audio:
+                                color = Fore.MAGENTA
+                                prefix = "Audio"
+                            else:
+                                color = Fore.BLUE
+                                prefix = "Video"
+                            
+                            # Calculate percentage
+                            percent = int((current / total) * 100)
+                            
+                            # Create a progress bar
+                            bar_length = 20
+                            filled_length = int(bar_length * current / total)
+                            bar = '█' * filled_length + '░' * (bar_length - filled_length)
+                            
+                            print(f"\r{color}{prefix} fragment: {current}/{total} [{bar}] {percent}%", end='')
+                            spinner_idx += 1
                     else:
                         print(f"\r{Fore.YELLOW}{line.strip()}", end='')
                 elif "ERROR:" in line:
@@ -743,6 +805,7 @@ def interactive_download():
     args.metadata = options_answers['metadata']
     args.keep_fragments = options_answers['keep_fragments']
     args.live = options_answers['live']
+    args.no_live_from_start = not options_answers['live']
     args.cookies = cookies_path
     args.verbose = False
     args.no_history = False
@@ -854,8 +917,7 @@ def interactive_history():
                 ]
                 
                 retry_answer = inquirer.prompt(retry_question)
-                if retry_answer and retry_answer['retry']:
-                    # Create args object for download
+                if retry_answer and retry_answer['retry']:                    # Create args object for download
                     class Args:
                         pass
                     
@@ -868,6 +930,7 @@ def interactive_history():
                     args.metadata = True
                     args.keep_fragments = False
                     args.live = True
+                    args.no_live_from_start = False
                     args.cookies = None
                     args.verbose = False
                     args.no_history = False
@@ -1050,6 +1113,7 @@ def main():
     download_parser.add_argument("-q", "--quality", default="best", help="Video quality to download")
     download_parser.add_argument("-t", "--template", help="Output filename template")
     download_parser.add_argument("--live", action="store_true", help="Download live stream from start")
+    download_parser.add_argument("--no-live-from-start", action="store_true", help="Don't download from the start of live streams (useful for Twitch)")
     download_parser.add_argument("--thumbnail", action="store_true", help="Save thumbnail")
     download_parser.add_argument("--metadata", action="store_true", help="Add metadata")
     download_parser.add_argument("--keep-fragments", action="store_true", help="Keep fragments after merging")
