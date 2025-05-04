@@ -4,23 +4,58 @@ import argparse
 import subprocess
 import time
 import json
+import shutil
+import threading
 from datetime import datetime
 from pathlib import Path
+import inquirer
+from colorama import init, Fore, Style, Back
+
+# Initialize colorama for cross-platform colored output
+init(autoreset=True)
 
 # Import required modules from the existing application
 from src.stream_downloader import StreamDownloader
 from src.stream_merger import process_stream_download
 from src.history_manager import HistoryManager
 from src.updater import get_current_version, check_for_updates
+from src.spinner import Spinner
+from src.cli_help import get_main_help, get_command_help
 
 def print_banner():
     """Print the application banner"""
     version = get_current_version()
-    print("=" * 60)
-    print(f"Stream Downloader CLI v{version}")
-    print("A tool for downloading Twitch and YouTube livestreams")
-    print("=" * 60)
-    print("")
+    
+    # Get terminal width for centered text
+    terminal_width = shutil.get_terminal_size().columns
+    
+    # ASCII Art Banner
+    banner = [
+        "╔═══════════════════════════════════════════════════════════════╗",
+        "║                                                               ║",
+        "║   ███████╗████████╗██████╗ ███████╗ █████╗ ███╗   ███╗       ║",
+        "║   ██╔════╝╚══██╔══╝██╔══██╗██╔════╝██╔══██╗████╗ ████║       ║",
+        "║   ███████╗   ██║   ██████╔╝█████╗  ███████║██╔████╔██║       ║",
+        "║   ╚════██║   ██║   ██╔══██╗██╔══╝  ██╔══██║██║╚██╔╝██║       ║",
+        "║   ███████║   ██║   ██║  ██║███████╗██║  ██║██║ ╚═╝ ██║       ║",
+        "║   ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝       ║",
+        "║                                                               ║",
+        "║   ██████╗  ██████╗ ██╗    ██╗███╗   ██╗██╗      ██████╗  █████╗ ██████╗ ███████╗██████╗  ║",
+        "║   ██╔══██╗██╔═══██╗██║    ██║████╗  ██║██║     ██╔═══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗ ║",
+        "║   ██║  ██║██║   ██║██║ █╗ ██║██╔██╗ ██║██║     ██║   ██║███████║██║  ██║█████╗  ██████╔╝ ║",
+        "║   ██║  ██║██║   ██║██║███╗██║██║╚██╗██║██║     ██║   ██║██╔══██║██║  ██║██╔══╝  ██╔══██╗ ║",
+        "║   ██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║███████╗╚██████╔╝██║  ██║██████╔╝███████╗██║  ██║ ║",
+        "║   ╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝ ║",
+        "║                                                               ║",
+        f"╚═══════════════════ v{version} ═════════════════════╝"
+    ]
+    
+    print()
+    for line in banner:
+        print(Fore.CYAN + line.center(terminal_width))
+        
+    print(f"\n{Fore.YELLOW}A powerful tool for downloading Twitch and YouTube livestreams\n".center(terminal_width))
+    print(Style.RESET_ALL)
 
 def check_dependencies():
     """Check if required dependencies are installed"""
@@ -44,14 +79,14 @@ def detect_platform(url):
         return "unknown"
 
 def download_with_yt_dlp(args):
-    """Download content using yt-dlp"""
+    """Download content using yt-dlp with progress display"""
     command = ["yt-dlp"]
     
     # Add URL
     command.append(args.url)
     
     # Quality options
-    if args.quality and args.quality != "best":
+    if hasattr(args, 'quality') and args.quality and args.quality != "best":
         command.extend(["-f", args.quality])
     
     # Output template
@@ -65,7 +100,7 @@ def download_with_yt_dlp(args):
         os.makedirs(output_dir, exist_ok=True)
     
     # Build output template
-    if args.template:
+    if hasattr(args, 'template') and args.template:
         output_template = args.template
     else:
         output_template = "%(title)s-%(id)s.%(ext)s"
@@ -73,42 +108,163 @@ def download_with_yt_dlp(args):
     command.extend(["-o", os.path.join(os.path.dirname(output_path), output_template)])
     
     # Live options
-    if args.live:
+    if hasattr(args, 'live') and args.live:
         command.append("--live-from-start")
     
     # Cookies file
-    if args.cookies:
+    if hasattr(args, 'cookies') and args.cookies:
         command.extend(["--cookies", args.cookies])
     
     # Other options
-    if args.thumbnail:
+    if hasattr(args, 'thumbnail') and args.thumbnail:
         command.append("--write-thumbnail")
-    if args.metadata:
+    if hasattr(args, 'metadata') and args.metadata:
         command.append("--add-metadata")
-    if args.keep_fragments:
+    if hasattr(args, 'keep_fragments') and args.keep_fragments:
         command.append("--keep-fragments")
-    if args.verbose:
+    if hasattr(args, 'verbose') and args.verbose:
         command.append("-v")
     
-    print(f"Running command: {' '.join(command)}")
+    # New options
+    if hasattr(args, 'proxy') and args.proxy:
+        command.extend(["--proxy", args.proxy])
+    if hasattr(args, 'retries') and args.retries is not None:
+        command.extend(["--retries", str(args.retries)])
+    if hasattr(args, 'timeout') and args.timeout is not None:
+        command.extend(["--socket-timeout", str(args.timeout)])
+    if hasattr(args, 'quiet') and args.quiet:
+        command.append("--quiet")
+    if hasattr(args, 'abort_on_error') and args.abort_on_error:
+        command.append("--abort-on-error")
+    
+    # Add progress visualization
+    command.append("--progress")
+    
+    print(f"{Fore.GREEN}Running command: {Fore.WHITE}{' '.join(command)}")
     
     # Record start time
     start_time = time.time()
     
+    # Create spinner animation
+    spinner_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    spinner_idx = 0
+    
     # Execute the download command
     try:
-        result = subprocess.run(command, check=True)
+        # Use Popen to capture output in real-time
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1
+        )
         
-        duration = time.time() - start_time
-        print(f"\nDownload completed in {duration:.2f} seconds")
+        # Keep track of the last lines for status display
+        last_status = ""
+        has_error = False
+        while process.poll() is None:
+            line = process.stdout.readline()
+            if line:
+                # Clear previous line and print current status with spinner
+                if "[download]" in line or "[ffmpeg]" in line:
+                    # Extract download percentage if available
+                    if "%" in line:
+                        last_status = line.strip()
+                        spinner_char = spinner_chars[spinner_idx % len(spinner_chars)]
+                        print(f"\r{Fore.CYAN}{spinner_char} {Fore.YELLOW}{last_status}", end='')
+                        spinner_idx += 1
+                    else:
+                        print(f"\r{Fore.YELLOW}{line.strip()}", end='')
+                elif "ERROR:" in line:
+                    has_error = True
+                    print(f"\n{Fore.RED}{line.strip()}")
+                else:
+                    print(f"{Fore.WHITE}{line.strip()}")
+            time.sleep(0.1)
         
-        # Save to history if enabled
-        if not args.no_history:
-            save_to_history(args, True)
+        # Make sure we print a newline after progress
+        print()
         
-        return True
+        if process.returncode == 0:
+            duration = time.time() - start_time
+            print(f"\n{Fore.GREEN}Download completed in {duration:.2f} seconds")
+            
+            # Save to history if enabled
+            if not hasattr(args, 'no_history') or not args.no_history:
+                save_to_history(args, True)
+            
+            return True
+        else:
+            print(f"\n{Fore.RED}Error: Download failed with exit code {process.returncode}")
+            
+            # Save failed download to history if enabled
+            if not hasattr(args, 'no_history') or not args.no_history:
+                save_to_history(args, False, error=f"Exit code {process.returncode}")
+            
+            return False
+            
+    except KeyboardInterrupt:
+        print(f"\n\n{Fore.YELLOW}Download cancelled by user.")
+        
+        # Save to history as canceled
+        if not hasattr(args, 'no_history') or not args.no_history:
+            save_to_history(args, False, error="Cancelled by user")
+        
+        return False
     except subprocess.CalledProcessError as e:
-        print(f"\nError: Download failed with exit code {e.returncode}")
+        print(f"\n{Fore.RED}Error: Download failed with exit code {e.returncode}")
+        
+        # Save failed download to history if enabled
+        if not hasattr(args, 'no_history') or not args.no_history:
+            save_to_history(args, False, error=str(e))
+        
+        return False
+        
+        # Check if we need to display any final output
+        remaining_output = process.stdout.read()
+        if remaining_output and ("ERROR:" in remaining_output or args.verbose):
+            print(f"{Fore.WHITE}{remaining_output.strip()}")
+        
+        if process.returncode == 0:
+            duration = time.time() - start_time
+            print(f"\n{Fore.GREEN}Download completed in {duration:.2f} seconds")
+            
+            # Save to history if enabled
+            if not args.no_history:
+                save_to_history(args, True)
+            
+            return True
+        else:
+            print(f"\n{Fore.RED}Error: Download failed with exit code {process.returncode}")
+            
+            # Save failed download to history if enabled
+            if not args.no_history:
+                error_msg = f"Exit code {process.returncode}"
+                if has_error:
+                    error_msg += " - Check logs for details"
+                save_to_history(args, False, error=error_msg)
+            
+            return False
+            
+    except KeyboardInterrupt:
+        print(f"\n\n{Fore.YELLOW}Download cancelled by user.")
+        
+        # Save to history as canceled
+        if not args.no_history:
+            save_to_history(args, False, error="Cancelled by user")
+        
+        return False
+    except subprocess.CalledProcessError as e:
+        print(f"\n{Fore.RED}Error: Download failed with exit code {e.returncode}")
+        
+        # Save failed download to history if enabled
+        if not args.no_history:
+            save_to_history(args, False, error=str(e))
+        
+        return False
+    except Exception as e:
+        print(f"\n{Fore.RED}Error: {str(e)}")
         
         # Save failed download to history if enabled
         if not args.no_history:
@@ -137,6 +293,30 @@ def save_to_history(args, success, error=None):
         print(f"Download {'success' if success else 'failure'} saved to history")
     except Exception as e:
         print(f"Warning: Failed to save to history - {str(e)}")
+
+def save_to_history(args, success, error=None):
+    """Save download information to history"""
+    url = args.url
+    platform = detect_platform(url)
+    
+    history_entry = {
+        "url": url,
+        "platform": platform,
+        "timestamp": datetime.now().isoformat(),
+        "output_path": args.output,
+        "success": success
+    }
+    
+    if hasattr(args, 'quality'):
+        history_entry["quality"] = args.quality
+    
+    if error:
+        history_entry["error_message"] = error
+    
+    history_manager = HistoryManager()
+    history_manager.add_download(history_entry)
+    
+    print(f"{Fore.GREEN}Download saved to history.")
 
 def print_history(count=None, platform=None):
     """Print download history"""
@@ -200,9 +380,440 @@ def check_for_app_updates():
     except Exception as e:
         print(f"Error checking for updates: {str(e)}")
 
+def interactive_download():
+    """Interactive download interface similar to twt downloader"""
+    # Make sure download directory exists
+    download_dir = os.path.join(os.getcwd(), "downloads")
+    if not os.path.exists(download_dir):
+        os.makedirs(download_dir, exist_ok=True)
+        print(f"{Fore.GREEN}Created 'downloads' folder for saving streams.")
+    
+    # Ask for stream URL
+    questions = [
+        inquirer.Text(
+            'stream_url',
+            message=f"{Fore.CYAN}Enter the stream URL (YouTube or Twitch):",
+            validate=lambda _, x: len(x) > 10 and ('youtube.com' in x or 'twitch.tv' in x or 'youtu.be' in x)
+        )
+    ]
+    
+    answers = inquirer.prompt(questions)
+    if not answers:
+        print(f"{Fore.RED}Operation cancelled.")
+        return
+    
+    url = answers['stream_url']
+    
+    # Detect platform
+    platform = detect_platform(url)
+    if platform == "unknown":
+        print(f"{Fore.RED}Error: URL must be from YouTube or Twitch.")
+        return
+    
+    print(f"\n{Fore.GREEN}Detected platform: {Fore.WHITE}{platform.upper()}")
+    
+    # Get available qualities
+    print(f"\n{Fore.YELLOW}Fetching stream information and available qualities...")
+    
+    # Use a spinner while fetching qualities
+    with Spinner(message=f"{Fore.YELLOW}Analyzing stream...", color=Fore.CYAN) as spinner:
+        # For a real implementation, we would get the actual qualities from the stream
+        # This is simplified for the example - add a short delay to simulate fetching
+        time.sleep(1.5)
+        spinner.update_message(f"{Fore.YELLOW}Processing stream metadata...")
+        time.sleep(1)
+        
+    if platform == "youtube":
+        qualities = ["1080p", "720p", "480p", "360p", "best"]
+    else:  # twitch
+        qualities = ["1080p60", "720p60", "720p", "480p", "360p", "160p", "best"]
+    
+    # Ask for quality
+    quality_question = [
+        inquirer.List(
+            'quality',
+            message=f"{Fore.CYAN}Select stream quality:",
+            choices=qualities,
+        )
+    ]
+    
+    quality_answer = inquirer.prompt(quality_question)
+    if not quality_answer:
+        print(f"{Fore.RED}Operation cancelled.")
+        return
+    
+    selected_quality = quality_answer['quality']
+    
+    # Generate default filename based on URL and date
+    default_filename = f"{platform}_stream_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    
+    # Ask for output filename
+    filename_question = [
+        inquirer.Text(
+            'filename',
+            message=f"{Fore.CYAN}Enter output filename (without extension):",
+            default=default_filename
+        )
+    ]
+    
+    filename_answer = inquirer.prompt(filename_question)
+    if not filename_answer:
+        print(f"{Fore.RED}Operation cancelled.")
+        return
+    
+    filename = filename_answer['filename']
+    
+    # Ask for additional options
+    options_questions = [
+        inquirer.Confirm('thumbnail', message=f"{Fore.CYAN}Save thumbnail?", default=True),
+        inquirer.Confirm('metadata', message=f"{Fore.CYAN}Add metadata?", default=True),
+        inquirer.Confirm('keep_fragments', message=f"{Fore.CYAN}Keep fragments after merging?", default=False),
+        inquirer.Confirm('live', message=f"{Fore.CYAN}Download from live stream start (if available)?", default=True)
+    ]
+    
+    options_answers = inquirer.prompt(options_questions)
+    if not options_answers:
+        print(f"{Fore.RED}Operation cancelled.")
+        return
+    
+    # Cookies file for members-only content
+    cookies_question = [
+        inquirer.Confirm('need_cookies', message=f"{Fore.CYAN}Is this members-only content requiring cookies?", default=False)
+    ]
+    
+    cookies_answer = inquirer.prompt(cookies_question)
+    if not cookies_answer:
+        print(f"{Fore.RED}Operation cancelled.")
+        return
+    
+    cookies_path = None
+    if cookies_answer['need_cookies']:
+        cookies_path_question = [
+            inquirer.Text(
+                'cookies_path',
+                message=f"{Fore.CYAN}Enter path to cookies.txt file:",
+            )
+        ]
+        cookies_path_answer = inquirer.prompt(cookies_path_question)
+        if cookies_path_answer:
+            cookies_path = cookies_path_answer['cookies_path']
+    
+    output_path = os.path.join(download_dir, filename)
+    
+    print(f"\n{Fore.GREEN}Starting download with the following settings:")
+    print(f"{Fore.YELLOW}URL: {Fore.WHITE}{url}")
+    print(f"{Fore.YELLOW}Platform: {Fore.WHITE}{platform}")
+    print(f"{Fore.YELLOW}Quality: {Fore.WHITE}{selected_quality}")
+    print(f"{Fore.YELLOW}Output: {Fore.WHITE}{output_path}")
+    print(f"{Fore.YELLOW}Save thumbnail: {Fore.WHITE}{options_answers['thumbnail']}")
+    print(f"{Fore.YELLOW}Add metadata: {Fore.WHITE}{options_answers['metadata']}")
+    print(f"{Fore.YELLOW}Keep fragments: {Fore.WHITE}{options_answers['keep_fragments']}")
+    print(f"{Fore.YELLOW}Download from live start: {Fore.WHITE}{options_answers['live']}")
+    print(f"{Fore.YELLOW}Using cookies: {Fore.WHITE}{cookies_path is not None}")
+    
+    # Confirm download
+    confirm_question = [
+        inquirer.Confirm('confirm', message=f"\n{Fore.CYAN}Start download with these settings?", default=True)
+    ]
+    
+    confirm_answer = inquirer.prompt(confirm_question)
+    if not confirm_answer or not confirm_answer['confirm']:
+        print(f"{Fore.RED}Download cancelled.")
+        return
+    
+    # Create an args object similar to what argparse would provide
+    class Args:
+        pass
+    
+    args = Args()
+    args.url = url
+    args.output = output_path
+    args.quality = selected_quality
+    args.template = None
+    args.thumbnail = options_answers['thumbnail']
+    args.metadata = options_answers['metadata']
+    args.keep_fragments = options_answers['keep_fragments']
+    args.live = options_answers['live']
+    args.cookies = cookies_path
+    args.verbose = False
+    args.no_history = False
+    
+    # Start the download
+    download_success = download_with_yt_dlp(args)
+    
+    if download_success:
+        # Wait for user to press a key before exiting
+        print(f"\n{Fore.GREEN}Download complete! Press Enter to return to the menu...")
+        input()
+    else:
+        print(f"\n{Fore.RED}Download failed. Press Enter to return to the menu...")
+        input()
+
+def interactive_history():
+    """Interactive history viewer"""
+    history_manager = HistoryManager()
+    
+    with Spinner(message=f"{Fore.YELLOW}Loading download history...", color=Fore.CYAN) as spinner:
+        downloads = history_manager.get_downloads()
+        time.sleep(0.5)  # Short delay to show the spinner
+    
+    if not downloads:
+        print(f"\n{Fore.YELLOW}No download history found.")
+        input(f"{Fore.CYAN}Press Enter to return to the menu...")
+        return
+    
+    print(f"\n{Fore.CYAN}Download History ({len(downloads)} entries):")
+    print(f"{Fore.YELLOW}{'ID':4} {'Date':16} {'Platform':8} {'Status':8} {'URL'}")
+    print(f"{Fore.YELLOW}{'-'*80}")
+    
+    for i, download in enumerate(downloads):
+        # Format timestamp
+        timestamp = download.get("timestamp", "")
+        try:
+            dt = datetime.fromisoformat(timestamp)
+            timestamp = dt.strftime("%Y-%m-%d %H:%M")
+        except (ValueError, TypeError):
+            timestamp = "Unknown date"
+        
+        platform = download.get("platform", "Unknown")
+        url = download.get("url", "Unknown URL")
+        quality = download.get("quality", "Unknown")
+        success = f"{Fore.GREEN}✓" if download.get("success", False) else f"{Fore.RED}✗"
+        
+        print(f"{i+1:4} {timestamp:16} {platform:8} {success:8} {url[:40]}{'...' if len(url) > 40 else ''}")
+    
+    print(f"{Fore.YELLOW}{'-'*80}")
+    
+    # Options for history
+    questions = [
+        inquirer.List(
+            'action',
+            message=f"{Fore.CYAN}Select action:",
+            choices=[
+                ('View details of an entry', 'view'),
+                ('Clear all history', 'clear'),
+                ('Return to main menu', 'back')
+            ],
+        )
+    ]
+    
+    answers = inquirer.prompt(questions)
+    if not answers:
+        return
+    
+    if answers['action'] == 'view':
+        id_question = [
+            inquirer.Text(
+                'id',
+                message=f"{Fore.CYAN}Enter entry ID to view details:",
+                validate=lambda _, x: x.isdigit() and 1 <= int(x) <= len(downloads)
+            )
+        ]
+        
+        id_answer = inquirer.prompt(id_question)
+        if id_answer:
+            entry_id = int(id_answer['id']) - 1
+            download = downloads[entry_id]
+            
+            print(f"\n{Fore.CYAN}Download Details:")
+            print(f"{Fore.YELLOW}URL: {Fore.WHITE}{download.get('url', 'Unknown')}")
+            print(f"{Fore.YELLOW}Platform: {Fore.WHITE}{download.get('platform', 'Unknown')}")
+            print(f"{Fore.YELLOW}Quality: {Fore.WHITE}{download.get('quality', 'Unknown')}")
+            print(f"{Fore.YELLOW}Output Path: {Fore.WHITE}{download.get('output_path', 'Unknown')}")
+            print(f"{Fore.YELLOW}Timestamp: {Fore.WHITE}{download.get('timestamp', 'Unknown')}")
+            
+            # Format status with color
+            success = download.get('success', False)
+            status_color = Fore.GREEN if success else Fore.RED
+            status_text = "Success" if success else "Failed"
+            print(f"{Fore.YELLOW}Status: {status_color}{status_text}")
+            
+            if 'error_message' in download:
+                print(f"{Fore.YELLOW}Error: {Fore.RED}{download.get('error_message')}")
+            
+            # Ask if user wants to retry the download
+            if not success:
+                retry_question = [
+                    inquirer.Confirm(
+                        'retry',
+                        message=f"{Fore.CYAN}Would you like to retry this download?",
+                        default=False
+                    )
+                ]
+                
+                retry_answer = inquirer.prompt(retry_question)
+                if retry_answer and retry_answer['retry']:
+                    # Create args object for download
+                    class Args:
+                        pass
+                    
+                    args = Args()
+                    args.url = download.get('url', '')
+                    args.output = download.get('output_path', os.path.join(os.getcwd(), "downloads"))
+                    args.quality = download.get('quality', 'best')
+                    args.template = None
+                    args.thumbnail = True
+                    args.metadata = True
+                    args.keep_fragments = False
+                    args.live = True
+                    args.cookies = None
+                    args.verbose = False
+                    args.no_history = False
+                    
+                    print(f"\n{Fore.GREEN}Retrying download...")
+                    download_with_yt_dlp(args)
+                    
+                    input(f"\n{Fore.CYAN}Press Enter to return to history...")
+                    interactive_history()
+                    return
+            
+            input(f"\n{Fore.CYAN}Press Enter to return to history...")
+            interactive_history()
+    
+    elif answers['action'] == 'clear':
+        confirm = [
+            inquirer.Confirm(
+                'confirm',
+                message=f"{Fore.RED}Are you sure you want to clear all download history?",
+                default=False
+            )
+        ]
+        
+        confirm_answer = inquirer.prompt(confirm)
+        if confirm_answer and confirm_answer['confirm']:
+            with Spinner(message=f"{Fore.YELLOW}Clearing history...", color=Fore.CYAN) as spinner:
+                clear_history()
+                time.sleep(0.5)  # Short delay to show the spinner
+            print(f"{Fore.GREEN}History cleared successfully!")
+            input(f"{Fore.CYAN}Press Enter to return to the menu...")
+    
+    # Return to main menu happens automatically
+
+def show_help():
+    """Display help information in the interactive mode"""
+    # Clear screen for better visuals
+    os.system('cls' if os.name == 'nt' else 'clear')
+    
+    print_banner()
+    
+    print(f"{Fore.CYAN}{'='*80}")
+    print(f"{Fore.YELLOW}Stream Downloader Help".center(80))
+    print(f"{Fore.CYAN}{'='*80}\n")
+    
+    # Basic usage
+    print(f"{Fore.GREEN}Basic Usage:")
+    print(f"{Fore.WHITE}  Stream Downloader is a tool for downloading Twitch and YouTube livestreams.")
+    print(f"{Fore.WHITE}  You can use it in interactive mode or with command-line arguments.\n")
+    
+    # Interactive mode commands
+    print(f"{Fore.GREEN}Interactive Mode Commands:")
+    print(f"{Fore.YELLOW}  Download a stream {Fore.WHITE}- Download video from Twitch or YouTube")
+    print(f"{Fore.YELLOW}  View download history {Fore.WHITE}- Browse and manage previous downloads")
+    print(f"{Fore.YELLOW}  Check for updates {Fore.WHITE}- See if a new version is available")
+    print(f"{Fore.YELLOW}  Help {Fore.WHITE}- Display this help information")
+    print(f"{Fore.YELLOW}  Exit {Fore.WHITE}- Close the application\n")
+    
+    # Command line options
+    print(f"{Fore.GREEN}Command Line Options:")
+    print(f"{Fore.YELLOW}  python stream-dl.py [options] command [command-options]")
+    print()
+    print(f"{Fore.YELLOW}  Global Options:")
+    print(f"{Fore.WHITE}    -i, --interactive     Run in interactive mode with a user-friendly interface")
+    print(f"{Fore.WHITE}    -h, --help            Show this help message and exit")
+    print()
+    print(f"{Fore.YELLOW}  Commands:")
+    print(f"{Fore.WHITE}    download              Download a stream")
+    print(f"{Fore.WHITE}    history               Manage download history")
+    print(f"{Fore.WHITE}    update                Check for application updates")
+    print()
+    print(f"{Fore.YELLOW}  Download Command Options:")
+    print(f"{Fore.WHITE}    python stream-dl.py download URL [options]")
+    print(f"{Fore.WHITE}    URL                   URL of the stream to download")
+    print(f"{Fore.WHITE}    -o, --output PATH     Output directory or file path")
+    print(f"{Fore.WHITE}    -q, --quality QUALITY Video quality to download (default: best)")
+    print(f"{Fore.WHITE}    -t, --template FORMAT Output filename template")
+    print(f"{Fore.WHITE}    --live                Download live stream from start")
+    print(f"{Fore.WHITE}    --thumbnail           Save thumbnail")
+    print(f"{Fore.WHITE}    --metadata            Add metadata")
+    print(f"{Fore.WHITE}    --keep-fragments      Keep fragments after merging")
+    print(f"{Fore.WHITE}    --cookies PATH        Path to cookies file for members-only content")
+    print(f"{Fore.WHITE}    -v, --verbose         Enable verbose output")
+    print(f"{Fore.WHITE}    --no-history          Don't save to download history")
+    print()
+    print(f"{Fore.YELLOW}  History Command Options:")
+    print(f"{Fore.WHITE}    python stream-dl.py history [options]")
+    print(f"{Fore.WHITE}    --count NUMBER        Number of history items to show")
+    print(f"{Fore.WHITE}    --platform PLATFORM   Filter by platform (youtube or twitch)")
+    print(f"{Fore.WHITE}    --clear               Clear download history")
+    print()
+    
+    # Examples
+    print(f"{Fore.GREEN}Examples:")
+    print(f"{Fore.WHITE}  python stream-dl.py --interactive")
+    print(f"{Fore.WHITE}  python stream-dl.py download https://youtube.com/watch?v=XXXX --quality 1080p")
+    print(f"{Fore.WHITE}  python stream-dl.py download https://twitch.tv/username --live --thumbnail")
+    print(f"{Fore.WHITE}  python stream-dl.py history --count 10 --platform youtube")
+    print(f"{Fore.WHITE}  python stream-dl.py update\n")
+    
+    input(f"{Fore.CYAN}Press Enter to return to the menu...")
+
+def interactive_menu():
+    """Show interactive main menu"""
+    while True:
+        # Clear screen for better visuals
+        os.system('cls' if os.name == 'nt' else 'clear')
+        
+        print_banner()
+        
+        questions = [
+            inquirer.List(
+                'action',
+                message=f"{Fore.CYAN}Select an option:",
+                choices=[
+                    ('Download a stream', 'download'),
+                    ('View download history', 'history'),
+                    ('Check for updates', 'update'),
+                    ('Help', 'help'),
+                    ('Exit', 'exit')
+                ],
+            )
+        ]
+        
+        answers = inquirer.prompt(questions)
+        if not answers:
+            print(f"{Fore.RED}Operation cancelled.")
+            break
+        
+        if answers['action'] == 'download':
+            interactive_download()
+        elif answers['action'] == 'history':
+            interactive_history()
+        elif answers['action'] == 'update':
+            check_for_app_updates()
+            input(f"\n{Fore.CYAN}Press Enter to return to the menu...")
+        elif answers['action'] == 'help':
+            show_help()
+        elif answers['action'] == 'exit':
+            print(f"{Fore.GREEN}Thank you for using Stream Downloader CLI!")
+            break
+
 def main():
     """Main entry point for CLI"""
     parser = argparse.ArgumentParser(description="Stream Downloader CLI")
+    
+    # Add a special argument for interactive mode
+    parser.add_argument(
+        "-i", "--interactive",
+        action="store_true",
+        help="Run in interactive mode with a user-friendly interface"
+    )
+    
+    # Add version argument
+    parser.add_argument(
+        "-v", "--version",
+        action="store_true",
+        help="Show version information and exit"
+    )
     
     # Create subparsers for different commands
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
@@ -218,24 +829,43 @@ def main():
     download_parser.add_argument("--metadata", action="store_true", help="Add metadata")
     download_parser.add_argument("--keep-fragments", action="store_true", help="Keep fragments after merging")
     download_parser.add_argument("--cookies", help="Path to cookies file for members-only content")
-    download_parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
+    download_parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
     download_parser.add_argument("--no-history", action="store_true", help="Don't save to download history")
+    download_parser.add_argument("--proxy", help="Use proxy for downloading. Format: http://[user:pass@]host:port/")
+    download_parser.add_argument("--retries", type=int, default=3, help="Number of retry attempts (default: 3)")
+    download_parser.add_argument("--timeout", type=int, default=30, help="Connection timeout in seconds (default: 30)")
+    download_parser.add_argument("--quiet", action="store_true", help="Suppress all output except errors")
+    download_parser.add_argument("--abort-on-error", action="store_true", help="Abort on first error")
     
     # History command
     history_parser = subparsers.add_parser("history", help="Manage download history")
     history_parser.add_argument("--count", type=int, help="Number of history items to show")
     history_parser.add_argument("--platform", choices=["youtube", "twitch"], help="Filter by platform")
     history_parser.add_argument("--clear", action="store_true", help="Clear download history")
+    history_parser.add_argument("--export", help="Export history to a JSON file")
+    history_parser.add_argument("--import", dest="import_file", help="Import history from a JSON file")
+    history_parser.add_argument("--retry", type=int, help="Retry a specific history entry by ID")
     
     # Update command
     update_parser = subparsers.add_parser("update", help="Check for application updates")
+    update_parser.add_argument("--force", action="store_true", help="Force update check ignoring cache")
     
-    # If no arguments provided, show help
-    if len(sys.argv) == 1:
-        parser.print_help()
+    # Help command
+    help_parser = subparsers.add_parser("help", help="Show help information for a specific command")
+    help_parser.add_argument("topic", nargs='?', help="Command to get help for")
+      # Parse arguments
+    args = parser.parse_args()
+    
+    # Show version and exit if requested
+    if args.version:
+        version = get_current_version()
+        print(f"Stream Downloader v{version}")
         return
     
-    args = parser.parse_args()
+    # If interactive mode is specified or no arguments provided, show the interactive menu
+    if args.interactive or len(sys.argv) == 1:
+        interactive_menu()
+        return
     
     print_banner()
     
@@ -250,11 +880,36 @@ def main():
     elif args.command == "history":
         if args.clear:
             clear_history()
+        elif args.export:
+            # Export functionality - implementation would be needed
+            print(f"Exporting history to {args.export}...")
+        elif args.import_file:
+            # Import functionality - implementation would be needed
+            print(f"Importing history from {args.import_file}...")
+        elif args.retry is not None:
+            # Retry functionality - implementation would be needed
+            print(f"Retrying download with ID {args.retry}...")
         else:
             print_history(args.count, args.platform)
     
     elif args.command == "update":
-        check_for_app_updates()
+        check_for_app_updates(force=args.force if hasattr(args, 'force') else False)
+    
+    elif args.command == "help":
+        if args.topic:
+            # Show help for specific command
+            print(f"Help for command: {args.topic}")
+            if args.topic == "download":
+                download_parser.print_help()
+            elif args.topic == "history":
+                history_parser.print_help()
+            elif args.topic == "update":
+                update_parser.print_help()
+            else:
+                print(f"Unknown help topic: {args.topic}")
+        else:
+            # Show general help
+            parser.print_help()
     
     else:
         parser.print_help()

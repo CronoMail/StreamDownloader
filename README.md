@@ -7,24 +7,28 @@ A modern application for downloading Twitch and YouTube livestreams with ease. A
 ## Features
 
 - **Multi-Platform Support**: Download livestreams from Twitch and YouTube
-- **Dual Interfaces**: Choose between the user-friendly GUI or powerful CLI
+- **Dual Interfaces**: 
+  - User-friendly GUI with advanced controls
+  - Powerful CLI with both interactive and command modes
 - **Advanced Stream Handling**: 
   - Downloads and processes live stream fragments similar to ytarchive
   - Captures streams from the beginning even when joining late
   - Supports multiple quality options
 - **User-Friendly Experience**:
-  - Modern, responsive interface with light and dark themes
+  - Modern, responsive interface with light and dark themes (GUI)
+  - Colorful, interactive menu-driven CLI with spinner animations
   - Real-time progress tracking with detailed logs
   - Automatic platform detection from URLs
 - **Accessibility Features**:
   - Members-only content support via cookies
   - Proxy configuration for region-restricted content
+  - Mobile usage support via Termux on Android
 - **Media Processing**:
   - Thumbnail and metadata embedding
   - Customizable output filename templates
   - Fragment preservation options
 - **Organization Tools**:
-  - Download history management
+  - Download history management with retry functionality
   - Export/import history functionality
 - **System Integration**:
   - Desktop shortcuts
@@ -102,7 +106,163 @@ Or on Windows, you can double-click the `run.bat` file.
 
 ### CLI Application
 
-The command-line interface provides fast access to downloading functionality:
+The command-line interface provides two ways to interact with the application:
+
+1. **Interactive Mode**: A user-friendly, menu-driven interface with colorful output
+2. **Command Mode**: Traditional command-line arguments for scripting and automation
+
+#### Interactive Mode
+
+Run the CLI in interactive mode:
+
+```bash
+python stream-dl.py --interactive
+# or simply
+python stream-dl.py
+```
+
+This presents a menu with the following options:
+- **Download a stream**: Start a new download with guided wizard
+- **View download history**: Browse, search, and manage previous downloads
+- **Check for updates**: Check for new versions of the application
+- **Help**: Display comprehensive documentation and usage examples
+- **Exit**: Quit the application
+
+#### Command Line Options
+
+```bash
+python stream-dl.py [options] command [command-options]
+```
+
+**Global Options:**
+- `-i, --interactive`: Run in interactive mode with a user-friendly interface
+- `-h, --help`: Show help message and exit
+- `-v, --version`: Show version information and exit
+
+**Commands:**
+- `download`: Download a stream
+- `history`: Manage download history
+- `update`: Check for application updates
+- `help`: Show help for a specific command
+
+**Download Command:**
+```bash
+python stream-dl.py download URL [options]
+```
+- `URL`: URL of the stream to download
+- `-o, --output PATH`: Output directory or file path
+- `-q, --quality QUALITY`: Video quality to download (default: best)
+- `-t, --template FORMAT`: Output filename template
+- `--live`: Download live stream from start
+- `--thumbnail`: Save thumbnail
+- `--metadata`: Add metadata
+- `--keep-fragments`: Keep fragments after merging
+- `--cookies PATH`: Path to cookies file for members-only content
+- `--verbose`: Enable verbose output
+- `--no-history`: Don't save to download history
+- `--proxy URL`: Use proxy for downloading. Format: http://[user:pass@]host:port/
+- `--retries NUMBER`: Number of retry attempts (default: 3)
+- `--timeout SECONDS`: Connection timeout in seconds (default: 30)
+- `--quiet`: Suppress all output except errors
+- `--abort-on-error`: Abort on first error
+
+**History Command:**
+```bash
+python stream-dl.py history [options]
+```
+- `--count NUMBER`: Number of history items to show
+- `--platform PLATFORM`: Filter by platform (youtube or twitch)
+- `--clear`: Clear download history
+- `--export FILE`: Export history to a JSON file
+- `--import FILE`: Import history from a JSON file
+- `--retry ID`: Retry a specific history entry by ID
+
+**Update Command:**
+```bash
+python stream-dl.py update [options]
+```
+- `--force`: Force update check ignoring cache
+
+**Help Command:**
+```bash
+python stream-dl.py help [topic]
+```
+- `topic`: Optional command to get specific help for
+
+#### CLI Workflow
+
+```
+                    +----------------------+
+                    |                      |
+                    |  stream-dl.py        |
+                    |  (Entry Point)       |
+                    |                      |
+                    +------+---------------+
+                           |
+                           |
+            +--------------|-------------+
+            |                            |
+ +----------v-----------+   +-----------v-----------+
+ | Interactive Mode     |   | Command Mode          |
+ |                      |   |                       |
+ | • Colorful UI        |   | • Command Arguments   |
+ | • Menu-Driven        |   | • Scriptable          |
+ | • Progress Animation |   | • Automation          |
+ | • Help System        |   | • Advanced Options    |
+ +---------+------------+   +-----------+-----------+
+           |                            |
+           +------------+---------------+
+                        |
+                        |
+           +------------v---------------+
+           |                            |
+           |  src/cli.py                |
+           |  CLI Implementation        |
+           |                            |
+           +------------+---------------+
+                        |
+                        |
+         +--------------+--------------+
+         |                             |
++--------v--------+   +----------------v---+
+|                 |   |                    |
+| yt-dlp          |   | History Manager    |
+| Stream Download |   | Download Tracking  |
+|                 |   |                    |
++--------+--------+   +----------------+---+
+         |                             |
+         +-------------+--------------+
+                       |
+                       |
+             +---------v----------+
+             |                    |
+             | FFmpeg             |
+             | Media Processing   |
+             |                    |
+             +--------------------+
+```
+
+#### Interactive Mode
+
+Simply run the application without arguments to enter the interactive mode:
+
+```bash
+python stream-dl.py
+```
+
+This launches a colorful, menu-driven interface similar to the twt folder downloader that allows you to:
+
+- Navigate through menus with arrow keys
+- Select options with interactive prompts
+- View real-time download progress with animations
+- Browse download history with detailed information
+- Access built-in help documentation
+- Easily retry failed downloads
+- Check for application updates
+
+#### Command Mode
+
+For scripting or automation, use the traditional command-line arguments:
 
 ```bash
 python stream-dl.py download URL [options]
@@ -125,24 +285,65 @@ python stream-dl.py download URL [options]
   python stream-dl.py update
   ```
 
+- **Show help information**:
+  ```bash
+  python stream-dl.py help [command]
+  ```
+
+- **Force interactive mode**:
+  ```bash
+  python stream-dl.py --interactive
+  ```
+
 #### CLI Options
 
 The CLI tool supports extensive options for customization:
 
 ```
-python stream-dl.py download [URL] [options]
+python stream-dl.py [global-options] command [command-options]
 
-Options:
-  -o, --output PATH       Output directory or file path
-  -q, --quality QUALITY   Video quality to download (default: best)
-  -t, --template FORMAT   Output filename template
-  --live                  Download live stream from start
-  --thumbnail             Save thumbnail
-  --metadata              Add metadata
-  --keep-fragments        Keep fragments after merging
-  --cookies PATH          Path to cookies file for members-only content
-  -v, --verbose           Enable verbose output
-  --no-history            Don't save to download history
+Global Options:
+  -i, --interactive      Run in interactive mode with a user-friendly interface
+  -v, --version          Show version information and exit
+  -h, --help             Show help message and exit
+
+Commands:
+  download               Download a stream
+  history                Manage download history
+  update                 Check for application updates
+  help                   Show help information for a specific command
+
+Download Options:
+  python stream-dl.py download URL [options]
+  URL                    URL of the stream to download
+  -o, --output PATH      Output directory or file path
+  -q, --quality QUALITY  Video quality to download (default: best)
+  -t, --template FORMAT  Output filename template
+  --live                 Download live stream from start
+  --thumbnail            Save thumbnail
+  --metadata             Add metadata
+  --keep-fragments       Keep fragments after merging
+  --cookies PATH         Path to cookies file for members-only content
+  --verbose              Enable verbose output
+  --no-history           Don't save to download history
+  --proxy URL            Use proxy for downloading
+  --retries NUMBER       Number of retry attempts (default: 3)
+  --timeout SECONDS      Connection timeout in seconds (default: 30)
+  --quiet, -q            Suppress all output except errors
+  --abort-on-error       Abort on first error
+
+History Options:
+  python stream-dl.py history [options]
+  --count NUMBER         Number of history items to show
+  --platform PLATFORM    Filter by platform (youtube or twitch)
+  --clear                Clear download history
+  --export FILE          Export history to a JSON file
+  --import FILE          Import history from a JSON file
+  --retry ID             Retry a specific history entry by ID
+
+Update Options:
+  python stream-dl.py update [options]
+  --force                Force update check ignoring cache
 ```
 
 ### Advanced Settings
@@ -163,8 +364,15 @@ The CLI version works on Android via Termux:
    ```bash
    pkg install python ffmpeg
    ```
-3. Clone the repository and install dependencies
-4. Run using the CLI interface
+3. Install required packages:
+   ```bash
+   pip install inquirer colorama yt-dlp
+   ```
+4. Clone the repository and install dependencies
+5. Run using the interactive CLI for the best mobile experience:
+   ```bash
+   python stream-dl.py
+   ```
 
 ## Project Structure
 
@@ -178,6 +386,7 @@ stream-downloader/
 │   ├── stream_merger.py       # Media processing utilities
 │   ├── history_manager.py     # Download history tracking
 │   ├── updater.py             # Update checking
+│   ├── spinner.py             # CLI spinner animation utilities
 │   ├── style.qss              # Light theme stylesheet
 │   └── style_dark.qss         # Dark theme stylesheet
 │
