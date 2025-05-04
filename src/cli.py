@@ -78,16 +78,77 @@ def detect_platform(url):
     else:
         return "unknown"
 
+def fetch_available_formats(url):
+    """Fetch available formats for a URL using yt-dlp"""
+    print(f"{Fore.YELLOW}Fetching available formats for {url}...")
+    
+    try:
+        with Spinner(message=f"{Fore.YELLOW}Analyzing stream...", color=Fore.CYAN) as spinner:
+            list_command = ["yt-dlp", "--list-formats", url]
+            result = subprocess.run(list_command, capture_output=True, text=True)
+            
+            spinner.update_message(f"{Fore.YELLOW}Processing format information...")
+            
+            if result.returncode == 0:
+                formats = []
+                for line in result.stdout.split('\n'):
+                    # Parse format lines
+                    if line.strip() and 'format code' not in line and '---' not in line:
+                        if any(res in line for res in ['1080', '720', '480', '360', '240', '144']):
+                            formats.append(line.strip())
+                return formats
+            else:
+                print(f"{Fore.RED}Error retrieving formats: {result.stderr}")
+                return None
+    except Exception as e:
+        print(f"{Fore.RED}Error: {str(e)}")
+        return None
+    
+    return None
+
 def download_with_yt_dlp(args):
     """Download content using yt-dlp with progress display"""
+    # Check if we need to list formats first
+    if hasattr(args, 'list_formats') and args.list_formats:
+        list_command = ["yt-dlp", "--list-formats", args.url]
+        print(f"{Fore.GREEN}Fetching available formats: {Fore.WHITE}{' '.join(list_command)}")
+        
+        try:
+            result = subprocess.run(list_command, capture_output=True, text=True)
+            if result.returncode == 0:
+                print(f"\n{Fore.CYAN}Available formats for {args.url}:")
+                print(f"{Fore.WHITE}{result.stdout}")
+                
+                # Ask if user wants to continue with download
+                continue_download = input(f"{Fore.YELLOW}Continue with download? (Y/n): ").strip().lower()
+                if continue_download and continue_download[0] == 'n':
+                    print(f"{Fore.YELLOW}Download canceled.")
+                    return False
+            else:
+                print(f"{Fore.RED}Error retrieving formats: {result.stderr}")
+        except Exception as e:
+            print(f"{Fore.RED}Error: {str(e)}")
+    
     command = ["yt-dlp"]
     
     # Add URL
     command.append(args.url)
     
-    # Quality options
+    # Quality options with fallback for specific resolutions
     if hasattr(args, 'quality') and args.quality and args.quality != "best":
-        command.extend(["-f", args.quality])
+        if hasattr(args, 'use_fallback') and args.use_fallback:
+            # Create a format string with fallbacks for common resolutions
+            if args.quality.startswith("1080"):
+                format_str = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/720p/best"
+            elif args.quality.startswith("720"):
+                format_str = "bestvideo[height<=720]+bestaudio/best[height<=720]/480p/best"
+            elif args.quality.startswith("480"):
+                format_str = "bestvideo[height<=480]+bestaudio/best[height<=480]/360p/best"
+            else:
+                format_str = args.quality
+            command.extend(["-f", format_str])
+        else:
+            command.extend(["-f", args.quality])
     
     # Output template
     output_path = args.output
@@ -186,6 +247,7 @@ def download_with_yt_dlp(args):
         # Make sure we print a newline after progress
         print()
         
+        # Check if the process completed successfully
         if process.returncode == 0:
             duration = time.time() - start_time
             print(f"\n{Fore.GREEN}Download completed in {duration:.2f} seconds")
@@ -196,11 +258,31 @@ def download_with_yt_dlp(args):
             
             return True
         else:
+            error_message = f"Exit code {process.returncode}"
+            
+            # Check if this is a format error and suggest solutions
+            if "Requested format is not available" in last_status:
+                print(f"\n{Fore.RED}Error: The requested quality ({args.quality}) is not available for this stream.")
+                print(f"{Fore.YELLOW}Suggestions:")
+                print(f"{Fore.WHITE}1. Use '--list-formats' to see all available formats")
+                print(f"{Fore.WHITE}2. Try using 'best' quality instead of a specific resolution")
+                print(f"{Fore.WHITE}3. Use the fallback option ('--use-fallback') to automatically try lower qualities")
+                
+                # Ask if the user wants to retry with 'best' quality
+                if not hasattr(args, 'no_interactive') or not args.no_interactive:
+                    retry = input(f"\n{Fore.YELLOW}Retry download with 'best' quality? (Y/n): ").strip().lower()
+                    if not retry or retry[0] != 'n':
+                        print(f"{Fore.GREEN}Retrying with best quality...")
+                        args.quality = "best"
+                        return download_with_yt_dlp(args)
+                
+                error_message = f"Requested quality ({args.quality}) not available"
+            
             print(f"\n{Fore.RED}Error: Download failed with exit code {process.returncode}")
             
             # Save failed download to history if enabled
             if not hasattr(args, 'no_history') or not args.no_history:
-                save_to_history(args, False, error=f"Exit code {process.returncode}")
+                save_to_history(args, False, error=error_message)
             
             return False
             
@@ -217,49 +299,6 @@ def download_with_yt_dlp(args):
         
         # Save failed download to history if enabled
         if not hasattr(args, 'no_history') or not args.no_history:
-            save_to_history(args, False, error=str(e))
-        
-        return False
-        
-        # Check if we need to display any final output
-        remaining_output = process.stdout.read()
-        if remaining_output and ("ERROR:" in remaining_output or args.verbose):
-            print(f"{Fore.WHITE}{remaining_output.strip()}")
-        
-        if process.returncode == 0:
-            duration = time.time() - start_time
-            print(f"\n{Fore.GREEN}Download completed in {duration:.2f} seconds")
-            
-            # Save to history if enabled
-            if not args.no_history:
-                save_to_history(args, True)
-            
-            return True
-        else:
-            print(f"\n{Fore.RED}Error: Download failed with exit code {process.returncode}")
-            
-            # Save failed download to history if enabled
-            if not args.no_history:
-                error_msg = f"Exit code {process.returncode}"
-                if has_error:
-                    error_msg += " - Check logs for details"
-                save_to_history(args, False, error=error_msg)
-            
-            return False
-            
-    except KeyboardInterrupt:
-        print(f"\n\n{Fore.YELLOW}Download cancelled by user.")
-        
-        # Save to history as canceled
-        if not args.no_history:
-            save_to_history(args, False, error="Cancelled by user")
-        
-        return False
-    except subprocess.CalledProcessError as e:
-        print(f"\n{Fore.RED}Error: Download failed with exit code {e.returncode}")
-        
-        # Save failed download to history if enabled
-        if not args.no_history:
             save_to_history(args, False, error=str(e))
         
         return False
@@ -267,32 +306,10 @@ def download_with_yt_dlp(args):
         print(f"\n{Fore.RED}Error: {str(e)}")
         
         # Save failed download to history if enabled
-        if not args.no_history:
+        if not hasattr(args, 'no_history') or not args.no_history:
             save_to_history(args, False, error=str(e))
         
         return False
-
-def save_to_history(args, success, error=None):
-    """Save download information to history"""
-    try:
-        history_manager = HistoryManager()
-        
-        download_info = {
-            "url": args.url,
-            "platform": detect_platform(args.url),
-            "quality": args.quality,
-            "output_path": os.path.abspath(args.output),
-            "timestamp": datetime.now().isoformat(),
-            "success": success
-        }
-        
-        if error:
-            download_info["error_message"] = error
-        
-        history_manager.add_download(download_info)
-        print(f"Download {'success' if success else 'failure'} saved to history")
-    except Exception as e:
-        print(f"Warning: Failed to save to history - {str(e)}")
 
 def save_to_history(args, success, error=None):
     """Save download information to history"""
@@ -437,12 +454,44 @@ def interactive_download():
         )
     ]
     
+    # Add option to list all available formats
+    list_formats_first = False
+    format_question = [
+        inquirer.Confirm(
+            'list_formats',
+            message=f"{Fore.CYAN}Would you like to see all available formats first?",
+            default=False
+        )
+    ]
+    
+    format_answer = inquirer.prompt(format_question)
+    if format_answer and format_answer['list_formats']:
+        list_formats_first = True
+        # Fetch and display available formats
+        formats = fetch_available_formats(url)
+        if formats:
+            print(f"\n{Fore.CYAN}Available formats for {url}:")
+            for idx, fmt in enumerate(formats):
+                print(f"{Fore.WHITE}{idx+1}. {fmt}")
+        
     quality_answer = inquirer.prompt(quality_question)
     if not quality_answer:
         print(f"{Fore.RED}Operation cancelled.")
         return
     
     selected_quality = quality_answer['quality']
+    
+    # Ask if user wants to enable automatic quality fallback
+    fallback_question = [
+        inquirer.Confirm(
+            'use_fallback',
+            message=f"{Fore.CYAN}Enable automatic quality fallback if selected quality is unavailable?",
+            default=True
+        )
+    ]
+    
+    fallback_answer = inquirer.prompt(fallback_question)
+    use_fallback = fallback_answer and fallback_answer['use_fallback']
     
     # Generate default filename based on URL and date
     default_filename = f"{platform}_stream_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
@@ -468,7 +517,9 @@ def interactive_download():
         inquirer.Confirm('thumbnail', message=f"{Fore.CYAN}Save thumbnail?", default=True),
         inquirer.Confirm('metadata', message=f"{Fore.CYAN}Add metadata?", default=True),
         inquirer.Confirm('keep_fragments', message=f"{Fore.CYAN}Keep fragments after merging?", default=False),
-        inquirer.Confirm('live', message=f"{Fore.CYAN}Download from live stream start (if available)?", default=True)
+        inquirer.Confirm('live', message=f"{Fore.CYAN}Download from live stream start (if available)?", default=True),
+        inquirer.Confirm('list_formats', message=f"{Fore.CYAN}List all available formats before downloading?", default=False),
+        inquirer.Confirm('use_fallback', message=f"{Fore.CYAN}Auto-fallback to lower quality if selected quality unavailable?", default=True)
     ]
     
     options_answers = inquirer.prompt(options_questions)
@@ -509,6 +560,8 @@ def interactive_download():
     print(f"{Fore.YELLOW}Add metadata: {Fore.WHITE}{options_answers['metadata']}")
     print(f"{Fore.YELLOW}Keep fragments: {Fore.WHITE}{options_answers['keep_fragments']}")
     print(f"{Fore.YELLOW}Download from live start: {Fore.WHITE}{options_answers['live']}")
+    print(f"{Fore.YELLOW}List formats: {Fore.WHITE}{options_answers['list_formats']}")
+    print(f"{Fore.YELLOW}Use quality fallback: {Fore.WHITE}{use_fallback}")
     print(f"{Fore.YELLOW}Using cookies: {Fore.WHITE}{cookies_path is not None}")
     
     # Confirm download
@@ -537,6 +590,9 @@ def interactive_download():
     args.cookies = cookies_path
     args.verbose = False
     args.no_history = False
+    args.list_formats = options_answers['list_formats']
+    args.use_fallback = use_fallback
+    args.no_interactive = False
     
     # Start the download
     download_success = download_with_yt_dlp(args)
@@ -659,6 +715,9 @@ def interactive_history():
                     args.cookies = None
                     args.verbose = False
                     args.no_history = False
+                    args.list_formats = False
+                    args.use_fallback = True
+                    args.no_interactive = False
                     
                     print(f"\n{Fore.GREEN}Retrying download...")
                     download_with_yt_dlp(args)
@@ -739,6 +798,14 @@ def show_help():
     print(f"{Fore.WHITE}    --cookies PATH        Path to cookies file for members-only content")
     print(f"{Fore.WHITE}    -v, --verbose         Enable verbose output")
     print(f"{Fore.WHITE}    --no-history          Don't save to download history")
+    print(f"{Fore.WHITE}    --proxy URL           Use proxy for downloading")
+    print(f"{Fore.WHITE}    --retries NUMBER      Number of retry attempts (default: 3)")
+    print(f"{Fore.WHITE}    --timeout SECONDS     Connection timeout in seconds (default: 30)")
+    print(f"{Fore.WHITE}    --quiet               Suppress all output except errors")
+    print(f"{Fore.WHITE}    --abort-on-error      Abort on first error")
+    print(f"{Fore.WHITE}    --list-formats        List all available formats before downloading")
+    print(f"{Fore.WHITE}    --use-fallback        Auto-fallback to lower quality if selected quality unavailable")
+    print(f"{Fore.WHITE}    --no-interactive      Don't prompt for retries or confirmations")
     print()
     print(f"{Fore.YELLOW}  History Command Options:")
     print(f"{Fore.WHITE}    python stream-dl.py history [options]")
@@ -752,6 +819,8 @@ def show_help():
     print(f"{Fore.WHITE}  python stream-dl.py --interactive")
     print(f"{Fore.WHITE}  python stream-dl.py download https://youtube.com/watch?v=XXXX --quality 1080p")
     print(f"{Fore.WHITE}  python stream-dl.py download https://twitch.tv/username --live --thumbnail")
+    print(f"{Fore.WHITE}  python stream-dl.py download https://youtube.com/watch?v=XXXX --list-formats")
+    print(f"{Fore.WHITE}  python stream-dl.py download https://youtube.com/watch?v=XXXX --use-fallback")
     print(f"{Fore.WHITE}  python stream-dl.py history --count 10 --platform youtube")
     print(f"{Fore.WHITE}  python stream-dl.py update\n")
     
@@ -836,6 +905,9 @@ def main():
     download_parser.add_argument("--timeout", type=int, default=30, help="Connection timeout in seconds (default: 30)")
     download_parser.add_argument("--quiet", action="store_true", help="Suppress all output except errors")
     download_parser.add_argument("--abort-on-error", action="store_true", help="Abort on first error")
+    download_parser.add_argument("--list-formats", action="store_true", help="List all available formats before downloading")
+    download_parser.add_argument("--use-fallback", action="store_true", help="Auto-fallback to lower quality if selected quality unavailable")
+    download_parser.add_argument("--no-interactive", action="store_true", help="Don't prompt for retries or confirmations")
     
     # History command
     history_parser = subparsers.add_parser("history", help="Manage download history")
@@ -853,7 +925,8 @@ def main():
     # Help command
     help_parser = subparsers.add_parser("help", help="Show help information for a specific command")
     help_parser.add_argument("topic", nargs='?', help="Command to get help for")
-      # Parse arguments
+    
+    # Parse arguments
     args = parser.parse_args()
     
     # Show version and exit if requested

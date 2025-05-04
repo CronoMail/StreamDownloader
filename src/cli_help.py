@@ -70,17 +70,21 @@ def get_download_help():
   {Fore.YELLOW}--keep-fragments{Style.RESET_ALL}       Keep fragments after merging
   {Fore.YELLOW}--cookies PATH{Style.RESET_ALL}         Path to cookies file for members-only content
   {Fore.YELLOW}--verbose{Style.RESET_ALL}              Enable verbose output
-  {Fore.YELLOW}--no-history{Style.RESET_ALL}           Don't save to download history
-  {Fore.YELLOW}--proxy URL{Style.RESET_ALL}            Use proxy for downloading
+  {Fore.YELLOW}--no-history{Style.RESET_ALL}           Don't save to download history  {Fore.YELLOW}--proxy URL{Style.RESET_ALL}            Use proxy for downloading
   {Fore.YELLOW}--retries NUMBER{Style.RESET_ALL}       Number of retry attempts (default: 3)
   {Fore.YELLOW}--timeout SECONDS{Style.RESET_ALL}      Connection timeout in seconds (default: 30)
   {Fore.YELLOW}--quiet{Style.RESET_ALL}                Suppress all output except errors
   {Fore.YELLOW}--abort-on-error{Style.RESET_ALL}       Abort on first error
+  {Fore.YELLOW}--list-formats{Style.RESET_ALL}         List all available formats before downloading
+  {Fore.YELLOW}--use-fallback{Style.RESET_ALL}         Auto-fallback to lower quality if selected quality unavailable
+  {Fore.YELLOW}--no-interactive{Style.RESET_ALL}       Don't prompt for retries or confirmations
 
 {Fore.GREEN}Examples:{Style.RESET_ALL}
   python stream-dl.py download https://youtube.com/watch?v=XXXX --quality 1080p
   python stream-dl.py download https://twitch.tv/username --live --thumbnail
   python stream-dl.py download https://youtube.com/watch?v=XXXX --cookies cookies.txt
+  python stream-dl.py download https://youtube.com/watch?v=XXXX --list-formats
+  python stream-dl.py download https://youtube.com/watch?v=XXXX --use-fallback
 """
     return help_text
 
